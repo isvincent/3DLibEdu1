@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#bg)"/>
+  <ellipse cx="256" cy="390" rx="180" ry="55" fill="#0284c7"/>
+  <ellipse cx="256" cy="365" rx="145" ry="42" fill="#fde047"/>
+  <ellipse cx="256" cy="350" rx="130" ry="35" fill="#22c55e"/>
+  <rect x="186" y="190" width="140" height="150" rx="12" fill="#3b82f6" stroke="#f8fafc" stroke-width="8"/>
+  <polygon points="256,110 160,195 352,195" fill="#f59e0b" stroke="#f8fafc" stroke-width="8"/>
+  <rect x="230" y="265" width="52" height="75" rx="6" fill="#1e293b"/>
+  <text x="256" y="455" font-family="Microsoft JhengHei, sans-serif" font-size="38" font-weight="bold" fill="#fde68a" text-anchor="middle">梅高知識島</text>
+</svg>

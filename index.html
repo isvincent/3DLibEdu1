@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="桃園市立楊梅高級中學圖書館 115學年新生利用教育 3D 數位知識島互動學習平台">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="梅高知識島">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <title>楊梅高中圖書館｜3D 數位知識島（RWD & PWA 旗艦版）</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --secondary: #f59e0b;
+      --success: #10b981;
+      --danger: #ef4444;
+      --purple: #8b5cf6;
+      --bg-glass: rgba(15, 23, 42, 0.88);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { overflow: hidden; background: #0f172a; color: #f8fafc; user-select: none; width: 100vw; height: 100dvh; position: fixed; }
+    #canvas-container { width: 100vw; height: 100dvh; display: block; touch-action: none; }
+
+    /* 頂部導覽列與進度條 (RWD 響應式) */
+    .top-bar {
+      position: fixed;
+      top: calc(12px + var(--safe-top));
+      left: 12px; right: 12px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none; z-index: 10; flex-wrap: wrap; gap: 8px;
+    }
+    .brand-box, .progress-box {
+      background: var(--bg-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 10px 16px; border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.18);
+      pointer-events: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+    .brand-box h1 { font-size: clamp(1rem, 2.5vw, 1.22rem); color: #60a5fa; display: flex; align-items: center; gap: 6px; }
+    .brand-box p { font-size: clamp(0.75rem, 1.8vw, 0.84rem); color: #cbd5e1; margin-top: 3px; }
+    .progress-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .badge-list { display: flex; gap: 5px; }
+    .badge {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(255,255,255,0.08); border: 2px solid #475569;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; cursor: pointer; transition: 0.25s;
+    }
+    .badge.unlocked { background: var(--success); border-color: #6ee7b7; box-shadow: 0 0 10px var(--success); transform: scale(1.06); }
+    .tool-btn {
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+      color: #fff; padding: 6px 11px; border-radius: 12px; cursor: pointer;
+      font-size: 0.82rem; transition: 0.2s; display: flex; align-items: center; gap: 4px; white-space: nowrap;
+    }
+    .tool-btn:hover { background: var(--primary); }
+    .tool-btn.cert-btn { background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #fde68a; font-weight: bold; }
+    .tool-btn.pwa-btn { background: linear-gradient(135deg, #10b981, #059669); border-color: #6ee7b7; font-weight: bold; display: none; }
+
+    /* 3D 浮空標籤 (支援觸控與桌面) */
+    .island-label {
+      position: absolute; transform: translate(-50%, -100%);
+      background: rgba(15, 23, 42, 0.92); color: #fff;
+      padding: 5px 12px; border-radius: 20px; font-size: clamp(0.75rem, 2vw, 0.86rem); font-weight: 600;
+      border: 2px solid #60a5fa; white-space: nowrap; cursor: pointer;
+      transition: transform 0.2s, background 0.2s; z-index: 5;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+    }
+    .island-label:hover, .island-label:active { transform: translate(-50%, -112%) scale(1.08); background: var(--primary); }
+    .island-label.done { border-color: var(--success); }
+    .island-label.done::after { content: ' ✓'; color: #34d399; font-weight: bold; }
+
+    /* 底部快速導覽按鈕 (RWD 橫向滑動抽屜設計) */
+    .bottom-nav {
+      position: fixed;
+      bottom: calc(14px + var(--safe-bottom));
+      left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; background: var(--bg-glass);
+      padding: 8px 12px; border-radius: 28px;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.18); z-index: 10;
+      max-width: 96vw; overflow-x: auto; scrollbar-width: none;
+    }
+    .bottom-nav::-webkit-scrollbar { display: none; }
+    .nav-btn {
+      background: rgba(255,255,255,0.1); border: none; color: #fff;
+      padding: 7px 13px; border-radius: 18px; cursor: pointer;
+      font-size: 0.84rem; transition: 0.2s; display: flex; align-items: center; gap: 5px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .nav-btn:hover, .nav-btn:active { background: var(--primary); transform: translateY(-2px); }
+
+    /* 知識與互動彈窗 (RWD 滿版優化) */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+      display: none; align-items: center; justify-content: center; z-index: 30;
+      backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+      padding: 12px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-card {
+      background: #1e293b; width: 100%; max-width: 760px;
+      max-height: calc(90dvh - var(--safe-top) - var(--safe-bottom));
+      border-radius: 20px; border: 1px solid rgba(255,255,255,0.22);
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.65); animation: popIn 0.22s ease-out;
+    }
+    @keyframes popIn { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header {
+      padding: 14px 18px; background: #0f172a;
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+    .modal-header h2 { font-size: clamp(1.05rem, 3vw, 1.25rem); color: #38bdf8; }
+    .tts-btn {
+      background: rgba(56, 189, 248, 0.15); border: 1px solid #38bdf8; color: #38bdf8;
+      padding: 5px 10px; border-radius: 12px; font-size: 0.78rem; cursor: pointer; white-space: nowrap;
+    }
+    .tts-btn:hover { background: #38bdf8; color: #0f172a; }
+    .close-btn {
+      background: none; border: none; color: #94a3b8; font-size: 1.6rem;
+      cursor: pointer; line-height: 1; padding: 0 4px;
+    }
+    .close-btn:hover { color: #fff; }
+    .modal-body { padding: 18px; overflow-y: auto; line-height: 1.68; font-size: 0.94rem; -webkit-overflow-scrolling: touch; }
+
+    /* 教材知識排版 */
+    .info-section { margin-bottom: 14px; background: rgba(15,23,42,0.55); padding: 12px 16px; border-radius: 12px; border-left: 4px solid #38bdf8; }
+    .info-section h3 { color: #fcd34d; font-size: 1rem; margin-bottom: 6px; }
+    .info-section ul { padding-left: 18px; color: #e2e8f0; }
+    .info-section li { margin-bottom: 5px; }
+    .step-flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+    .step-pill { background: #2563eb; padding: 4px 10px; border-radius: 16px; font-size: 0.8rem; }
+
+    /* 互動闖關小測驗區 */
+    .quiz-box {
+      margin-top: 16px; background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.4); padding: 14px; border-radius: 12px;
+    }
+    .quiz-box h4 { color: #34d399; margin-bottom: 10px; font-size: 0.98rem; }
+    .quiz-options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .quiz-option {
+      background: #0f172a; border: 1px solid #334155; color: #f8fafc;
+      padding: 10px 12px; border-radius: 8px; text-align: left; cursor: pointer; transition: 0.2s; font-size: 0.9rem;
+    }
+    .quiz-option:hover { border-color: #60a5fa; background: #1e293b; }
+    .quiz-option.correct { background: rgba(16, 185, 129, 0.28); border-color: var(--success); }
+    .quiz-option.wrong { background: rgba(239, 68, 68, 0.28); border-color: var(--danger); }
+    .feedback-msg { margin-top: 10px; font-weight: bold; font-size: 0.9rem; }
+
+    /* 11題 FAQ 連續闖關計時賽樣式 */
+    .arena-stats {
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;
+      background: #0f172a; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px;
+      border: 1px solid rgba(139, 92, 246, 0.4);
+    }
+    .stat-pill { font-weight: bold; color: #c4b5fd; font-size: 0.88rem; }
+    .faq-Accordion { margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; }
+    .faq-item { background: rgba(15,23,42,0.5); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 0.86rem; }
+    .faq-item strong { color: #93c5fd; display: block; margin-bottom: 4px; }
+
+    /* 證書產出表單與預覽 */
+    .cert-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .cert-input {
+      flex: 1; min-width: 110px; padding: 9px 12px; border-radius: 10px;
+      border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 0.9rem;
+    }
+    #cert-canvas { width: 100%; max-width: 680px; height: auto; border-radius: 12px; border: 2px solid #fbbf24; display: block; margin: 0 auto 12px; }
+
+    /* 手機版專屬 RWD 微調 (< 768px) */
+    @media (max-width: 768px) {
+      .top-bar { flex-direction: column; align-items: stretch; gap: 6px; }
+      .brand-box, .progress-box { padding: 8px 12px; border-radius: 12px; }
+      .brand-box p { display: none; } /* 手機版精簡副標題以保留 3D 視野 */
+      .progress-box { justify-content: space-between; }
+      .badge { width: 26px; height: 26px; font-size: 0.75rem; }
+      .bottom-nav { justify-content: flex-start; border-radius: 18px; padding: 6px 10px; }
+      .modal-card { max-height: 92dvh; border-radius: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部資訊與進度列 -->
+  <div class="top-bar">
+    <div class="brand-box">
+      <h1>🏝️ 楊梅高中圖書館｜3D 數位知識島</h1>
+      <p>探索主島與「啟明分島」6 大地標、挑戰 11 題 FAQ 計時賽，領取新生學習認證卡！</p>
+    </div>
+    <div class="progress-box">
+      <div>
+        <div style="font-size: 0.72rem; color: #94a3b8;">探索進度</div>
+        <div id="progress-text" style="font-weight: bold; color: #38bdf8; font-size: 0.88rem;">0 / 6 已解鎖</div>
+      </div>
+      <div class="badge-list" id="badge-container">
+        <div class="badge" onclick="focusZone(0)" title="1. 圖書館環境導覽">🏛️</div>
+        <div class="badge" onclick="focusZone(1)" title="2. 啟明樓藝文分島">🎨</div>
+        <div class="badge" onclick="focusZone(2)" title="3. 借還與續借規則">📚</div>
+        <div class="badge" onclick="focusZone(3)" title="4. 使用與事務機">💳</div>
+        <div class="badge" onclick="focusZone(4)" title="5. 入館秩序與RFID">🛡️</div>
+        <div class="badge" onclick="focusZone(5)" title="6. FAQ 11題計時賽">⚡</div>
+      </div>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button class="tool-btn pwa-btn" id="pwa-install-btn" onclick="installPWA()">📲 安裝 APP</button>
+        <button class="tool-btn" id="sound-toggle" onclick="toggleSound()">🔊</button>
+        <button class="tool-btn cert-btn" onclick="openCertModal()">🎓 通行證</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D 畫布與浮空標籤容器 -->
+  <div id="canvas-container"></div>
+  <div id="labels-container"></div>
+
+  <!-- 底部快速導覽 (支援手機橫向滑動) -->
+  <div class="bottom-nav">
+    <button class="nav-btn" onclick="focusZone(0)">🏛️ 1.圖書館本館</button>
+    <button class="nav-btn" onclick="focusZone(1)">🎨 2.啟明分島</button>
+    <button class="nav-btn" onclick="focusZone(2)">📚 3.借還規則</button>
+    <button class="nav-btn" onclick="focusZone(3)">💳 4.事務機與特藏</button>
+    <button class="nav-btn" onclick="focusZone(4)">🛡️ 5.入館RFID結界</button>
+    <button class="nav-btn" onclick="focusZone(5)">⚡ 6.FAQ 11題計時賽</button>
+    <button class="nav-btn" onclick="resetCamera()">🔄 全島鳥瞰</button>
+  </div>
+
+  <!-- 知識與測驗彈窗 -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modal-title">地標標題</h2>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="tts-btn" id="tts-btn" onclick="speakCurrentModal()">🗣️ 語音導覽</button>
+          <button class="close-btn" onclick="closeModal()">×</button>
+        </div>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- PWA Service Worker 註冊與安裝邏輯 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker registered:', reg.scope))
+          .catch(err => console.warn('Service Worker registration failed:', err));
+      });
+    }
+
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const installBtn = document.getElementById('pwa-install-btn');
+      if (installBtn) installBtn.style.display = 'flex';
+    });
+
+    window.installPWA = async function() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        document.getElementById('pwa-install-btn').style.display = 'none';
+      }
+      deferredPrompt = null;
+    };
+  </script>
+
+  <!-- 引入 Three.js 與 OrbitControls -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ==========================================
+    // 模組 A：Web Audio API 合成音效與語音導覽 (TTS)
+    // ==========================================
+    let soundEnabled = true;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new AudioCtx();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    window.playSound = function(type) {
+      if (!soundEnabled) return;
+      initAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (type === 'click') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (type === 'cardBeep') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1046.5, now);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+        osc.start(now);
+        osc.stop(now + 0.14);
+      } else if (type === 'correct') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.1);
+        osc.frequency.setValueAtTime(783.99, now + 0.2);
+        osc.frequency.setValueAtTime(1046.5, now + 0.3);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+        osc.start(now);
+        osc.stop(now + 0.45);
+      } else if (type === 'wrong') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.linearRampToValueAtTime(150, now + 0.25);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } else if (type === 'fanfare') {
+        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((freq, idx) => {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = 'triangle';
+          o.frequency.value = freq;
+          o.connect(g);
+          g.connect(audioCtx.destination);
+          g.gain.setValueAtTime(0.15, now + idx * 0.09);
+          g.gain.exponentialRampToValueAtTime(0.008, now + idx * 0.09 + 0.35);
+          o.start(now + idx * 0.09);
+          o.stop(now + idx * 0.09 + 0.35);
+        });
+      }
+    };
+
+    window.toggleSound = function() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('sound-toggle').innerText = soundEnabled ? '🔊' : '🔇';
+      if (!soundEnabled && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    };
+
+    let currentModalPlainText = '';
+    window.speakCurrentModal = function() {
+      if (!('speechSynthesis' in window)) return alert('您的裝置瀏覽器不支援語音合成功能');
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(currentModalPlainText);
+      utter.lang = 'zh-TW';
+      utter.rate = 1.05;
+      window.speechSynthesis.speak(utter);
+    };
+
+    // ==========================================
+    // 模組 B：6 座島嶼地標與 11 題 FAQ 完整教材資料庫 (含 LocalStorage 進度保存)
+    // ==========================================
+    const STORAGE_KEY = 'ymhs_library_island_progress_v1';
+    let savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"unlocked":[],"faqBest":0}');
+    const unlockedZones = new Set(savedState.unlocked || []);
+    let faqScore = savedState.faqBest || 0;
+    let faqTimer = 0;
+    let faqInterval = null;
+    let currentFaqIdx = 0;
+
+    function saveProgress() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        unlocked: Array.from(unlockedZones),
+        faqBest: faqScore
+      }));
+    }
+
+    const faqList = [
+      {
+        q: "Q01：請問每個學生一次可以借幾本書？每本書可以借多久？",
+        options: [
+          "每人最多可借 4 本，每本可借 2 週；到期前可線上或臨櫃續借 1 次（最長 2 週）",
+          "每人最多可借 2 本，每本可借 1 週，不可續借",
+          "每人最多可借 10 本，每本可借 1 個月"
+        ],
+        ans: 0,
+        aText: "每人最多可借4本，每一本書可借2週。若想延長借期，請於到期日前到圖書館或上圖書館網頁線上辦理續借，最長續借期為2週。"
+      },
+      {
+        q: "Q02：如果我要找書，怎麼使用學校的圖書查詢系統？",
+        options: [
+          "直接打電話去教育部查詢",
+          "楊梅高中首頁 ➔ 圖書館網頁 ➔ 館藏圖書查詢 ➔ 選擇關鍵字、ISBN等 ➔ 開始查詢",
+          "只能到二樓書庫一本一本翻找，沒有線上查詢系統"
+        ],
+        ans: 1,
+        aText: "步驟：楊梅高中首頁 ➔ 圖書館網頁 ➔ 館藏圖書查詢 ➔ 選擇關鍵字、ISBN等 ➔ 開始查詢。"
+      },
+      {
+        q: "Q03：我借的書逾期了，怎麼辦？",
+        options: [
+          "每逾期一天要罰款 50 元現金",
+          "為避免權益受損建議盡快歸還，逾期歸還天數即為「暫停借閱權限之天數」",
+          "逾期不會有任何影響，可以繼續借書"
+        ],
+        ans: 1,
+        aText: "為避免權益受損，建議盡快將書歸還，累計每本書逾期歸還天數即為暫停借閱權限之天數。"
+      },
+      {
+        q: "Q04：請問漫畫區的漫畫或一樓當月期刊可以借回家看嗎？",
+        options: [
+          "一樓當月期刊及二樓漫畫都「只限館內閱讀」，過期雜誌移至二樓書庫才供外借",
+          "漫畫跟當月期刊都可以外借 2 週",
+          "只有當日報紙跟畢業紀念冊可以外借"
+        ],
+        ans: 0,
+        aText: "一樓當月期刊、二樓漫畫、梅高特藏區刊物都只限館內閱讀，不開放外借！（過期雜誌移至二樓可供外借）"
+      },
+      {
+        q: "Q05：個人或班級於上課時間如何申請借用圖書館？",
+        options: [
+          "不需任何證件與同意，隨時直接走進來即可",
+          "個人須帶學生證登記並經導師或任課老師簽署洽公證明；班級需經導師同意由班長或圖書股長提前預約（教師借用優先）",
+          "圖書館上課時間全面鎖門，不開放任何師生與班級借用"
+        ],
+        ans: 1,
+        aText: "個人借用：須攜帶學生證登記，並經導師或任課老師簽署洽公證明。班級借用：經導師同意，由班長或圖書股長提前預約（同一時段一班為原則，教師借用優先）。"
+      },
+      {
+        q: "Q06：我想要影印、列印資料，圖書館可以借我影印卡嗎？收費多少？",
+        options: [
+          "圖書館免費提供影印卡，列印完全免費",
+          "請自備悠遊卡（餘額10元以上），黑白影印/列印每頁 2 元、彩色每頁 6 元",
+          "只能投幣使用，黑白每頁 10 元"
+        ],
+        ans: 1,
+        aText: "請自備悠遊卡（餘額10元以上）作為影印、列印使用，黑白每頁2元，彩色每頁6元。"
+      },
+      {
+        q: "Q07：圖書館可以掃描資料嗎？需要收費嗎？",
+        options: [
+          "設有事務機器可進行掃描；需自備悠遊卡（餘額10元以上），只需過卡，無需付費（不收費）",
+          "掃描每頁收費 6 元",
+          "圖書館沒有掃描設備"
+        ],
+        ans: 0,
+        aText: "圖書館設有事務機器可進行掃描。需自備悠遊卡（餘額10元以上），只需過卡，不收費。"
+      },
+      {
+        q: "Q08：我可以帶自己的書籍進入圖書館閱讀嗎？",
+        options: [
+          "完全不行，只能看圖書館的書",
+          "可以帶自己的書籍，但不得帶書包以及任何食物、飲料（含礦泉水）進入圖書館",
+          "可以帶自己的書，也可以邊喝珍珠奶茶邊看書"
+        ],
+        ans: 1,
+        aText: "可以帶自己的書籍入館閱讀，但不得攜帶書包以及任何飲食（含礦泉水）進入圖書館。"
+      },
+      {
+        q: "Q09：我可以借學校的影音光碟（DVD）回家欣賞嗎？",
+        options: [
+          "學生可借用「家用版」影片回家欣賞（請勿公播）；「公播版」影片限教職同仁借用",
+          "學生可以直接借公播版影片去電影院播放",
+          "所有影音光碟都不開放借閱"
+        ],
+        ans: 0,
+        aText: "學生可借用家用版影片，請勿公播使用；公播版影音光碟限教職員工同仁借用。"
+      },
+      {
+        q: "Q10：中午午休時間我不想睡午覺，可以到圖書館使用嗎？",
+        options: [
+          "可以自由進館聊天，圖書館還會幫忙開立消除缺曠證明",
+          "無特殊原因請回教室午休；若有特殊事件急需處理，須經導師同意（備有同意文件）才能留館，且圖書館不發給到館和消除缺曠紀錄之任何證明",
+          "午休時間只有高三可以不用導師同意直接進館"
+        ],
+        ans: 1,
+        aText: "若無特殊原因，午休請回教室休息。若有特殊事件急需處理，須經導師同意（備有同意文件）才能留館。圖書館不會發給到館和消除缺曠紀錄之任何證明！"
+      },
+      {
+        q: "Q11：如何推薦圖書館購買新書？",
+        options: [
+          "楊梅高中首頁 ➔ 圖書館網頁 ➔ 登入個人帳號 ➔ 填寫推薦內容 ➔ 圖書館審核",
+          "寫在紙條上塞進還書箱",
+          "學生不能推薦新書"
+        ],
+        ans: 0,
+        aText: "步驟：楊梅高中首頁 ➔ 圖書館網頁 ➔ 登入個人帳號 ➔ 填寫推薦內容 ➔ 圖書館審核。"
+      }
+    ];
+
+    const zonesData = [
+      {
+        id: 0,
+        name: "🏛️ 1. 圖書館環境導覽塔",
+        color: 0x3b82f6,
+        pos: [0, 2.2, 0],
+        ttsText: "歡迎來到圖書館本館！一樓設有辦公區、服務櫃台、期刊區、資訊檢索區、梅高特藏區、討論室和閱讀區；二樓為書庫和閱讀區。開放時間為早上8點至下午4點，第8堂未上輔導課可入館自習，打掃時間不得入館。",
+        content: `
+          <div class="info-section">
+            <h3>📍 圖書館本館樓層配置</h3>
+            <ul>
+              <li><strong>一樓空間</strong>：辦公區、讀者服務櫃台、期刊區、資訊檢索區、梅高特藏區、討論室、閱讀區。</li>
+              <li><strong>二樓空間</strong>：書庫、閱讀區（借書請由一樓入館 ➔ 二樓書庫找書/取書 ➔ 一樓櫃台完成借書）。</li>
+              <li><strong>館內視聽廣播</strong>：一樓播放公播音樂，<strong>中午播放 25 分鐘新聞</strong>，每天播放不同頻道。</li>
+            </ul>
+          </div>
+          <div class="info-section">
+            <h3>⏰ 開放時間與時段規定</h3>
+            <ul>
+              <li><strong>館舍開放時間</strong>：<strong>08:00 ～ 16:00</strong>。</li>
+              <li><strong>第 8 堂課</strong>：為館務處理時間，<strong>未上輔導課的同學可以入館自習</strong>。</li>
+              <li><strong>打掃時間</strong>：<strong>不得入館使用</strong>（例外者需獲導師同意）。</li>
+            </ul>
+          </div>
+        `,
+        quiz: {
+          q: "【本館空間闖關】請問圖書館二樓有哪些空間？第 8 堂課與打掃時間的規定為何？",
+          options: [
+            "二樓為書庫和閱讀區；第 8 堂未上輔導課可入館自習，打掃時間不得入館（例外需導師同意）",
+            "二樓為辦公區與期刊區；打掃時間可自由入館吹冷氣",
+            "二樓為紅土藝術空間；16:00 後才開放借書"
+          ],
+          ans: 0,
+          explain: "答對了！二樓是書庫與閱讀區，第8堂未上輔導課的同學歡迎入館自習！"
+        }
+      },
+      {
+        id: 1,
+        name: "🎨 2. 啟明樓藝文分島",
+        color: 0xf43f5e,
+        pos: [-18, 1.8, -4],
+        ttsText: "這裡是透過吊橋相連的啟明樓藝文分島！啟明樓一樓設有喜閱學堂，四樓則為紅土藝術空間，結合閱讀與美感教育。",
+        content: `
+          <div class="info-section">
+            <h3>🌉 跨海吊橋延伸空間：啟明樓</h3>
+            <ul>
+              <li><strong>啟明樓一樓</strong>：<strong>喜閱學堂</strong>（多元閱讀與特色課程學習空間）。</li>
+              <li><strong>啟明樓四樓</strong>：<strong>紅土藝術空間</strong>（校園藝文展覽與美感浸潤場域）。</li>
+            </ul>
+          </div>
+          <div class="info-section">
+            <h3>🌐 線上數位資源延伸</h3>
+            <ul>
+              <li><strong>線上資源與電子書</strong>：請由<strong>學校首頁</strong>點選進入閱讀和借用（部分資源限校內閱讀）。</li>
+            </ul>
+          </div>
+        `,
+        quiz: {
+          q: "【啟明分島闖關】請問「啟明樓一樓」與「啟明樓四樓」分別為什麼特色空間？",
+          options: [
+            "一樓是書庫、四樓是資訊檢索區",
+            "一樓為「喜閱學堂」、四樓為「紅土藝術空間」",
+            "一樓是福利社、四樓是視聽室"
+          ],
+          ans: 1,
+          explain: "完全正確！啟明樓一樓為喜閱學堂、四樓為紅土藝術空間！"
+        }
+      },
+      {
+        id: 2,
+        name: "📚 3. 借閱魔法轉運站",
+        color: 0xf59e0b,
+        pos: [-7, 1.8, -6],
+        ttsText: "借閱規則說明：憑學生證每人最多借4本，借期2週，請於開放日16點前至一樓櫃台完成。到期前1至2日可辦理續借2週。逾期歸還將暫停借閱權限，累計每本書逾期天數即為停權天數。",
+        content: `
+          <div class="info-section">
+            <h3>🔄 借書、還書、續借與逾期規則</h3>
+            <ul>
+              <li><strong>借書程序</strong>：請攜帶<strong>學生證</strong>，由 1F 入館 ➔ 2F 書庫找書 ➔ <strong>開放日 16:00 前至 1F 櫃台完成借書</strong>。</li>
+              <li><strong>借閱額度與期限</strong>：每人最多可借 <strong>4 本</strong>，借期 <strong>2 週</strong>。</li>
+              <li><strong>續借規定</strong>：於<strong>到期日前 1～2 日</strong>到圖書館或圖書查詢系統辦理，續借期為 <strong>2 週</strong>。</li>
+              <li><strong>還書與逾期</strong>：到期前至 1F 讀者服務櫃台歸還。逾期將暫停借閱權利，<strong>累計每本書逾期天數 ＝ 暫停借閱權限天數</strong>。</li>
+            </ul>
+          </div>
+          <div class="info-section">
+            <h3>🔍 圖書查詢系統 5 步驟</h3>
+            <div class="step-flow">
+              <span class="step-pill">1. 楊梅高中首頁</span> ➔
+              <span class="step-pill">2. 圖書館網頁</span> ➔
+              <span class="step-pill">3. 館藏圖書查詢</span> ➔
+              <span class="step-pill">4. 選擇關鍵字、ISBN等</span> ➔
+              <span class="step-pill">5. 開始查詢</span>
+            </div>
+          </div>
+        `,
+        quiz: {
+          q: "【借還規則闖關】若同學借了 2 本書，各逾期 3 天才歸還，請問會受到什麼處置？",
+          options: [
+            "累計每本書逾期天數為暫停借閱權限天數（共暫停借閱 6 天）",
+            "永久取消學生證資格",
+            "只要繳交 10 元悠遊卡費即可消除紀錄"
+          ],
+          ans: 0,
+          explain: "太棒了！累計每本書逾期天數即為暫停借閱權限天數，記得在到期日前 1~2 日續借或準時歸還喔！"
+        }
+      },
+      {
+        id: 3,
+        name: "💳 4. 科技與特藏工坊",
+        color: 0x10b981,
+        pos: [7, 1.8, -5],
+        ttsText: "科技與特藏工坊：影印、列印、掃描請自備餘額10元以上之悠遊卡，黑白每頁2元、彩色6元，掃描只需過卡免費。梅高特藏區、當月期刊與二樓漫畫僅供館內閱讀不外借。",
+        content: `
+          <div class="info-section">
+            <h3>🖨️ 事務機服務（請自備悠遊卡，餘額 10 元以上）</h3>
+            <ul>
+              <li><strong>黑白影印 / 列印</strong>：每頁 <strong>2 元</strong>。</li>
+              <li><strong>彩色影印 / 列印</strong>：每頁 <strong>6 元</strong>。</li>
+              <li><strong>掃描服務</strong>：自備悠遊卡（餘額 10 元以上），<strong>只需過卡，無需付費（免費）</strong>！</li>
+            </ul>
+          </div>
+          <div class="info-section">
+            <h3>🏺 梅高特藏、期刊報紙與數位規範</h3>
+            <ul>
+              <li><strong>梅高特藏區（不外借）</strong>：陳列<strong>《梅岡風》、最近幾屆畢業紀念冊、《梅高青年》</strong>等刊物。</li>
+              <li><strong>期刊、報紙與漫畫</strong>：1F 當月期刊不外借（<strong>過期雜誌移置 2F 書庫供外借</strong>）；1F 當日報紙至少保存最近二週供查閱；<strong>2F 漫畫書籍僅供在館閱讀，不外借</strong>。</li>
+              <li><strong>手機與電腦規範</strong>：館內<strong>不得使用手機</strong>（教師授課所需除外）；檢索電腦<strong>不可連線任何不當網頁</strong>，違者經查證記錄後將受<strong>校規警告以上處分</strong>。</li>
+              <li><strong>影音光碟</strong>：公播版限教職員工借用；學生可借<strong>家用版影音光碟（不得公播使用）</strong>。</li>
+            </ul>
+          </div>
+        `,
+        quiz: {
+          q: "【事務機與特藏闖關】小楊自備悠遊卡（餘額 50 元）印了 3 頁黑白、1 頁彩色，並掃描了 5 頁文件，請問共扣款多少元？",
+          options: [
+            "黑白 3×2＝6 元 ＋ 彩色 1×6＝6 元 ＋ 掃描免費 ＝ 共 12 元",
+            "掃描每頁 2 元，共扣款 22 元",
+            "全部免費"
+          ],
+          ans: 0,
+          explain: "嗶！（悠遊卡過卡音效）計算完全正確！黑白每頁2元、彩色6元，掃描只需過卡不收費！"
+        }
+      },
+      {
+        id: 4,
+        name: "🛡️ 5. 秩序與 RFID 守護結界",
+        color: 0xec4899,
+        pos: [-6, 1.8, 6],
+        ttsText: "進入圖書館請遵守秩序結界：不可攜帶飲食含礦泉水及書包入館。全區設有監控與圖書RFID安全系統，空間不外借製作海報或畢業紀念冊。",
+        content: `
+          <div class="info-section">
+            <h3>🚫 入館門禁與行為規範</h3>
+            <ul>
+              <li><strong>禁止攜入物品</strong>：不可攜帶<strong>飲食（含礦泉水）、書包</strong>等私人物品入館（可攜帶自己的書籍入館閱讀）。</li>
+              <li><strong>館內行為守則</strong>：不可大聲喧嘩、製造髒亂、避免奔跑，<strong>嚴禁將椅子當作玩樂工具</strong>，不得破壞任何公物。</li>
+              <li><strong>空間借用限制</strong>：圖書館所有區域，<strong>不外借製作海報、製作畢業紀念冊</strong>等相關非閱讀之活動。</li>
+            </ul>
+          </div>
+          <div class="info-section">
+            <h3>📡 上課入館登記與 RFID 安全系統</h3>
+            <ul>
+              <li><strong>上課時間入館</strong>：須攜帶<strong>學生證登記並獲教師同意</strong>（簽署洽公證明），未帶學生證者不得留館。</li>
+              <li><strong>安全系統</strong>：全區設有<strong>監控系統</strong>和<strong>圖書 RFID 安全系統</strong>；若有不當使用行為，圖書館有權暫時停止使用權利。</li>
+            </ul>
+          </div>
+        `,
+        quiz: {
+          q: "【RFID 安檢門闖關】下列哪一種行為符合圖書館入館規定？",
+          options: [
+            "帶全班同學去圖書館討論室剪貼海報、做畢業紀念冊並喝礦泉水",
+            "將書包放館外置物櫃，不帶飲食（含礦泉水），安靜入館閱讀並配合 RFID 安全系統",
+            "上課時間沒帶學生證也沒請老師簽名，直接溜進圖書館滑手機"
+          ],
+          ans: 1,
+          explain: "通過 RFID 感應門！遵守不帶飲食與書包、愛惜公物的規定，您是模範讀者！"
+        }
+      },
+      {
+        id: 5,
+        name: "⚡ 6. FAQ 11題計時試煉神殿",
+        color: 0x8b5cf6,
+        pos: [6, 1.8, 6],
+        ttsText: "歡迎來到智慧問答神殿！這裡收錄了新生最常詢問的11道問題，包含午休規定與新書推薦流程。完成連續闖關即可解鎖神殿徽章！",
+        isArena: true
+      }
+    ];
+
+    // ==========================================
+    // 模組 C：Three.js 3D 雙島嶼、吊橋與動態小船場景 (含 RWD 相機自適應)
+    // ==========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b132b);
+    scene.fog = new THREE.FogExp2(0x0b132b, 0.011);
+
+    const isMobile = () => window.innerWidth < 768;
+    const camera = new THREE.PerspectiveCamera(isMobile() ? 55 : 45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(-4, isMobile() ? 28 : 20, isMobile() ? 42 : 30);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.maxPolarAngle = Math.PI / 2 - 0.04;
+    controls.minDistance = 8;
+    controls.maxDistance = 65;
+    controls.target.set(-4, 0, 0);
+
+    // 燈光
+    scene.add(new THREE.AmbientLight(0xffffff, 0.78));
+    const dirLight = new THREE.DirectionalLight(0xfffbeb, 1.5);
+    dirLight.position.set(18, 28, 18);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    // 1. 海洋
+    const sea = new THREE.Mesh(
+      new THREE.CylinderGeometry(85, 85, 2, 64),
+      new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.25, metalness: 0.1 })
+    );
+    sea.position.y = -1.5;
+    scene.add(sea);
+
+    // 2. 圖書館主島
+    const mainSand = new THREE.Mesh(
+      new THREE.CylinderGeometry(14, 16, 1.5, 32),
+      new THREE.MeshStandardMaterial({ color: 0xfde047, roughness: 0.8 })
+    );
+    mainSand.position.y = -0.2;
+    scene.add(mainSand);
+
+    const mainGrass = new THREE.Mesh(
+      new THREE.CylinderGeometry(12.5, 13.8, 1.2, 32),
+      new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7 })
+    );
+    mainGrass.position.y = 0.6;
+    scene.add(mainGrass);
+
+    // 3. 啟明樓獨立子島嶼
+    const subSand = new THREE.Mesh(
+      new THREE.CylinderGeometry(5.5, 6.8, 1.5, 24),
+      new THREE.MeshStandardMaterial({ color: 0xfde047, roughness: 0.8 })
+    );
+    subSand.position.set(-18, -0.2, -4);
+    scene.add(subSand);
+
+    const subGrass = new THREE.Mesh(
+      new THREE.CylinderGeometry(4.8, 5.4, 1.2, 24),
+      new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.7 })
+    );
+    subGrass.position.set(-18, 0.6, -4);
+    scene.add(subGrass);
+
+    // 4. 跨海木造吊橋
+    const bridgeGroup = new THREE.Group();
+    for (let i = 0; i < 8; i++) {
+      const plank = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.18, 2.2),
+        new THREE.MeshStandardMaterial({ color: 0x92400e })
+      );
+      const t = i / 7;
+      plank.position.set(-11.5 - t * 3.2, 1.25 + Math.sin(t * Math.PI) * 0.4, -2.2 - t * 1.2);
+      plank.rotation.y = 0.32;
+      bridgeGroup.add(plank);
+    }
+    scene.add(bridgeGroup);
+
+    // 5. 裝飾樹木與環島知識小船
+    function createTree(x, z) {
+      const g = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 1.1, 8), new THREE.MeshStandardMaterial({ color: 0x78350f }));
+      trunk.position.y = 0.55;
+      const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.0, 2.0, 8), new THREE.MeshStandardMaterial({ color: 0x15803d }));
+      leaves.position.y = 1.8;
+      g.add(trunk, leaves);
+      g.position.set(x, 1.2, z);
+      scene.add(g);
+    }
+    [[-3, -8], [3, -8], [10, 0], [0, 9], [-16, -7], [-20, -1]].forEach(p => createTree(p[0], p[1]));
+
+    const boat = new THREE.Group();
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 1.0), new THREE.MeshStandardMaterial({ color: 0xd97706 }));
+    const sail = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 4), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    sail.position.y = 1.0;
+    boat.add(hull, sail);
+    scene.add(boat);
+
+    // 6. 建立 6 座主題地標 3D 模型與浮空標籤
+    const interactables = [];
+    const labelsContainer = document.getElementById('labels-container');
+    const labelElements = [];
+
+    zonesData.forEach((zone, idx) => {
+      const group = new THREE.Group();
+      group.position.set(...zone.pos);
+
+      const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.0, 2.3, 0.5, 16),
+        new THREE.MeshStandardMaterial({ color: 0xe2e8f0 })
+      );
+      base.position.y = -0.7;
+      group.add(base);
+
+      let mainMesh;
+      const mat = new THREE.MeshStandardMaterial({ color: zone.color, roughness: 0.3, metalness: 0.2 });
+
+      if (idx === 0) {
+        mainMesh = new THREE.Mesh(new THREE.BoxGeometry(2.8, 3.0, 2.8), mat);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(2.4, 1.4, 4), new THREE.MeshStandardMaterial({ color: 0x1d4ed8 }));
+        roof.position.y = 2.2;
+        roof.rotation.y = Math.PI / 4;
+        group.add(roof);
+      } else if (idx === 1) {
+        mainMesh = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.2, 2.4), mat);
+        const artFrame = new THREE.Mesh(
+          new THREE.TorusGeometry(1.1, 0.18, 12, 24),
+          new THREE.MeshStandardMaterial({ color: 0xfef08a })
+        );
+        artFrame.position.y = 2.5;
+        group.add(artFrame);
+      } else if (idx === 2) {
+        mainMesh = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.7, 1.1), mat);
+      } else if (idx === 3) {
+        mainMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 2.6, 8), mat);
+      } else if (idx === 4) {
+        mainMesh = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.35, 16, 32), mat);
+        mainMesh.position.y = 0.5;
+      } else {
+        mainMesh = new THREE.Mesh(new THREE.OctahedronGeometry(1.65, 0), mat);
+        mainMesh.position.y = 0.6;
+      }
+
+      mainMesh.castShadow = true;
+      mainMesh.userData = { zoneId: zone.id };
+      group.add(mainMesh);
+      scene.add(group);
+      interactables.push(mainMesh);
+
+      const label = document.createElement('div');
+      label.className = 'island-label';
+      label.id = `label-${zone.id}`;
+      label.innerText = zone.name;
+      label.onclick = () => focusZone(zone.id);
+      labelsContainer.appendChild(label);
+
+      labelElements.push({
+        el: label,
+        pos: new THREE.Vector3(zone.pos[0], zone.pos[1] + 2.8, zone.pos[2]),
+        mesh: mainMesh
+      });
+    });
+
+    // 初始化進度 UI
+    updateProgressUI(false);
+
+    // 3D 點擊偵測 (避免拖曳旋轉時誤觸)
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let downPos = { x: 0, y: 0 };
+
+    window.addEventListener('pointerdown', (e) => {
+      downPos = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 6) return;
+      if (e.target.closest('.modal-card') || e.target.closest('.bottom-nav') || e.target.closest('.top-bar') || e.target.closest('.island-label')) return;
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(interactables);
+      if (hits.length > 0) {
+        focusZone(hits[0].object.userData.zoneId);
+      }
+    });
+
+    // ==========================================
+    // 模組 D：視角控制、彈窗互動與 11 題 FAQ 連續闖關計時賽
+    // ==========================================
+    let targetCamPos = null;
+    let targetLookAt = null;
+
+    window.focusZone = function(zoneId) {
+      playSound('click');
+      const z = zonesData[zoneId];
+      const distOffset = isMobile() ? 13 : 9.5;
+      targetLookAt = new THREE.Vector3(z.pos[0], z.pos[1], z.pos[2]);
+      targetCamPos = new THREE.Vector3(z.pos[0] + 2, z.pos[1] + 6, z.pos[2] + distOffset);
+      openZoneModal(zoneId);
+    };
+
+    window.resetCamera = function() {
+      playSound('click');
+      targetLookAt = new THREE.Vector3(-4, 0, 0);
+      targetCamPos = new THREE.Vector3(-4, isMobile() ? 28 : 22, isMobile() ? 42 : 32);
+    };
+
+    window.openZoneModal = function(zoneId) {
+      clearInterval(faqInterval);
+      const z = zonesData[zoneId];
+      document.getElementById('modal-title').innerText = z.name;
+      document.getElementById('tts-btn').style.display = 'inline-block';
+      currentModalPlainText = z.ttsText || z.name;
+
+      const body = document.getElementById('modal-body');
+
+      if (z.isArena) {
+        renderFaqArena(body);
+      } else {
+        const quizHtml = `
+          <div class="quiz-box">
+            <h4>${z.quiz.q}</h4>
+            <div class="quiz-options">
+              ${z.quiz.options.map((opt, i) => `
+                <button class="quiz-option" onclick="checkZoneAnswer(${zoneId}, ${i}, this)">${opt}</button>
+              `).join('')}
+            </div>
+            <div class="feedback-msg" id="feedback-${zoneId}"></div>
+          </div>
+        `;
+        body.innerHTML = z.content + quizHtml;
+      }
+      document.getElementById('modal-overlay').classList.add('show');
+    };
+
+    window.closeModal = function() {
+      clearInterval(faqInterval);
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      document.getElementById('modal-overlay').classList.remove('show');
+    };
+
+    window.checkZoneAnswer = function(zoneId, selectedIdx, btnEl) {
+      const z = zonesData[zoneId];
+      const feedback = document.getElementById(`feedback-${zoneId}`);
+      const allBtns = btnEl.parentElement.querySelectorAll('.quiz-option');
+      allBtns.forEach(b => b.classList.remove('correct', 'wrong'));
+
+      if (selectedIdx === z.quiz.ans) {
+        playSound(zoneId === 3 || zoneId === 4 ? 'cardBeep' : 'correct');
+        btnEl.classList.add('correct');
+        feedback.style.color = '#34d399';
+        feedback.innerText = '🎉 ' + z.quiz.explain;
+        unlockedZones.add(zoneId);
+        saveProgress();
+        updateProgressUI(true);
+      } else {
+        playSound('wrong');
+        btnEl.classList.add('wrong');
+        feedback.style.color = '#f87171';
+        feedback.innerText = '❌ 再仔細看一下上方教材說明喔！';
+      }
+    };
+
+    // --- 11 題 FAQ 連續闖關計時賽 ---
+    function renderFaqArena(containerEl) {
+      currentFaqIdx = 0;
+      faqScore = 0;
+      faqTimer = 0;
+      clearInterval(faqInterval);
+      faqInterval = setInterval(() => {
+        faqTimer++;
+        const timerEl = document.getElementById('arena-timer');
+        if (timerEl) timerEl.innerText = `⏱️ 用時：${faqTimer} 秒`;
+      }, 1000);
+
+      showFaqQuestion(containerEl);
+    }
+
+    function showFaqQuestion(containerEl) {
+      const item = faqList[currentFaqIdx];
+      currentModalPlainText = item.q;
+      containerEl.innerHTML = `
+        <div class="arena-stats">
+          <span class="stat-pill">⚡ 進度：第 ${currentFaqIdx + 1} / ${faqList.length} 題</span>
+          <span class="stat-pill">🏆 答對：${faqScore} 題</span>
+          <span class="stat-pill" id="arena-timer">⏱️ 用時：${faqTimer} 秒</span>
+        </div>
+        <div class="quiz-box" style="margin-top:0;">
+          <h4>${item.q}</h4>
+          <div class="quiz-options">
+            ${item.options.map((opt, i) => `
+              <button class="quiz-option" onclick="answerArenaQuestion(${i}, this)">${opt}</button>
+            `).join('')}
+          </div>
+          <div class="feedback-msg" id="arena-feedback"></div>
+        </div>
+        <div class="faq-Accordion">
+          <p style="color:#94a3b8; font-size:0.84rem; margin-bottom:8px;">💡 提示：答對 8 題以上即可解鎖「FAQ 試煉神殿」徽章！下方可隨時翻閱完整 11 題 FAQ 寶典：</p>
+          ${faqList.map(f => `<div class="faq-item"><strong>${f.q}</strong>${f.aText}</div>`).join('')}
+        </div>
+      `;
+    }
+
+    window.answerArenaQuestion = function(selectedIdx, btnEl) {
+      const item = faqList[currentFaqIdx];
+      const fb = document.getElementById('arena-feedback');
+      const allBtns = btnEl.parentElement.querySelectorAll('.quiz-option');
+      allBtns.forEach(b => b.disabled = true);
+
+      if (selectedIdx === item.ans) {
+        playSound('correct');
+        btnEl.classList.add('correct');
+        faqScore++;
+        fb.style.color = '#34d399';
+        fb.innerText = '✅ 答對了！ ' + item.aText;
+      } else {
+        playSound('wrong');
+        btnEl.classList.add('wrong');
+        allBtns[item.ans].classList.add('correct');
+        fb.style.color = '#f87171';
+        fb.innerText = '❌ 正確解答：' + item.aText;
+      }
+
+      setTimeout(() => {
+        currentFaqIdx++;
+        const body = document.getElementById('modal-body');
+        if (currentFaqIdx < faqList.length) {
+          showFaqQuestion(body);
+        } else {
+          finishFaqArena(body);
+        }
+      }, 1600);
+    };
+
+    function finishFaqArena(containerEl) {
+      clearInterval(faqInterval);
+      const passed = faqScore >= 8;
+      if (passed) {
+        playSound('fanfare');
+        unlockedZones.add(5);
+        saveProgress();
+        updateProgressUI(true);
+      }
+      containerEl.innerHTML = `
+        <div class="info-section" style="text-align:center; padding:20px;">
+          <h3 style="font-size:1.3rem; color:${passed ? '#34d399' : '#f87171'};">
+            ${passed ? '🎉 恭喜通過 11 題 FAQ 智慧試煉！' : '💪 再接再厲！未達 8 題過關門檻'}
+          </h3>
+          <p style="margin:12px 0; font-size:1.05rem;">
+            總成績：<strong>${faqScore} / ${faqList.length} 題</strong> ｜ 總耗時：<strong>${faqTimer} 秒</strong>
+          </p>
+          <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px;">
+            <button class="tool-btn" onclick="openZoneModal(5)">🔄 重新挑戰計時賽</button>
+            <button class="tool-btn cert-btn" onclick="openCertModal()">🎓 前往領取學習證書</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function updateProgressUI(withFanfare = false) {
+      const count = unlockedZones.size;
+      document.getElementById('progress-text').innerText = `${count} / 6 已解鎖`;
+      const badges = document.getElementById('badge-container').children;
+      unlockedZones.forEach(id => {
+        if (badges[id]) badges[id].classList.add('unlocked');
+        const lbl = document.getElementById(`label-${id}`);
+        if (lbl) lbl.classList.add('done');
+      });
+      if (count === 6) {
+        if (withFanfare) playSound('fanfare');
+        document.getElementById('progress-text').innerText = `🏆 全島 6 徽章完美制霸！`;
+      }
+    }
+
+    // ==========================================
+    // 模組 E：學習歷程通行證（Canvas PNG 證書自動繪製與下載）
+    // ==========================================
+    window.openCertModal = function() {
+      playSound('click');
+      clearInterval(faqInterval);
+      document.getElementById('modal-title').innerText = '🎓 楊梅高中圖書館｜新生利用教育數位通行證';
+      document.getElementById('tts-btn').style.display = 'none';
+      const body = document.getElementById('modal-body');
+
+      body.innerHTML = `
+        <p style="margin-bottom:12px; color:#cbd5e1; font-size:0.9rem;">
+          輸入您的班級、座號與姓名，系統將即時把您的島嶼探索進度（目前解鎖 <strong>${unlockedZones.size} / 6</strong> 座地標）繪製為高解析度學習證明圖片，可直接下載放入學習歷程檔案！
+        </p>
+        <div class="cert-form">
+          <input class="cert-input" id="cert-class" placeholder="班級（例：101）" value="101" oninput="drawCertificate()">
+          <input class="cert-input" id="cert-num" placeholder="座號（例：08）" value="08" oninput="drawCertificate()">
+          <input class="cert-input" id="cert-name" placeholder="請輸入姓名" value="王小梅" oninput="drawCertificate()">
+          <button class="tool-btn cert-btn" onclick="downloadCertificate()">⬇️ 下載 PNG 證書</button>
+        </div>
+        <canvas id="cert-canvas" width="900" height="560"></canvas>
+      `;
+      document.getElementById('modal-overlay').classList.add('show');
+      drawCertificate();
+    };
+
+    window.drawCertificate = function() {
+      const canvas = document.getElementById('cert-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const cls = document.getElementById('cert-class').value || '___';
+      const num = document.getElementById('cert-num').value || '__';
+      const name = document.getElementById('cert-name').value || '______';
+
+      const grad = ctx.createLinearGradient(0, 0, 900, 560);
+      grad.addColorStop(0, '#0f172a');
+      grad.addColorStop(0.5, '#1e3a8a');
+      grad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 900, 560);
+
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(24, 24, 852, 512);
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(36, 36, 828, 488);
+
+      ctx.fillStyle = '#fde68a';
+      ctx.font = 'bold 34px "Microsoft JhengHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('桃園市立楊梅高級中學 圖書館', 450, 95);
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 28px "Microsoft JhengHei", sans-serif';
+      ctx.fillText('115學年新生利用教育｜3D 數位知識島探索通行證', 450, 140);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '24px "Microsoft JhengHei", sans-serif';
+      ctx.fillText(`班級：${cls} 班    座號：${num} 號    姓名：${name}`, 450, 205);
+
+      ctx.font = '18px "Microsoft JhengHei", sans-serif';
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillText(`已完成島嶼任務進度：${unlockedZones.size} / 6 座主題地標   ｜   FAQ 試煉最高答對：${faqScore} / 11 題`, 450, 250);
+
+      const badgeNames = ['1.環境導覽塔', '2.啟明藝文島', '3.借還魔法站', '4.科技特藏坊', '5.秩序RFID門', '6.FAQ試煉殿'];
+      badgeNames.forEach((bName, i) => {
+        const x = 115 + i * 134;
+        const y = 330;
+        const isUnlocked = unlockedZones.has(i);
+
+        ctx.beginPath();
+        ctx.arc(x, y, 42, 0, Math.PI * 2);
+        ctx.fillStyle = isUnlocked ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.06)';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = isUnlocked ? '#10b981' : '#475569';
+        ctx.stroke();
+
+        ctx.fillStyle = isUnlocked ? '#6ee7b7' : '#64748b';
+        ctx.font = 'bold 20px "Microsoft JhengHei", sans-serif';
+        ctx.fillText(isUnlocked ? '★ 已解鎖' : '未解鎖', x, y + 7);
+
+        ctx.fillStyle = isUnlocked ? '#f8fafc' : '#94a3b8';
+        ctx.font = '15px "Microsoft JhengHei", sans-serif';
+        ctx.fillText(bName, x, y + 68);
+      });
+
+      const today = new Date().toLocaleDateString('zh-TW');
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '16px "Microsoft JhengHei", sans-serif';
+      ctx.fillText(`核發日期：${today}   ｜   系統認證：楊梅高中圖書館 3D 數位知識島互動平台`, 450, 485);
+    };
+
+    window.downloadCertificate = function() {
+      playSound('fanfare');
+      const canvas = document.getElementById('cert-canvas');
+      const name = document.getElementById('cert-name').value || 'student';
+      const link = document.createElement('a');
+      link.download = `楊梅高中圖書館_新生利用教育通行證_${name}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    };
+
+    // ==========================================
+    // 模組 F：動畫迴圈與 RWD 視窗自適應
+    // ==========================================
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      const boatAngle = t * 0.35;
+      boat.position.set(Math.cos(boatAngle) * 19 - 3, -0.35 + Math.sin(t * 3) * 0.08, Math.sin(boatAngle) * 14);
+      boat.rotation.y = -boatAngle;
+
+      labelElements.forEach((item, idx) => {
+        if (idx === 4 || idx === 5) item.mesh.rotation.y = t * 0.8;
+        item.mesh.position.y = Math.sin(t * 2 + idx) * 0.14 + (idx >= 4 ? 0.5 : 0);
+
+        const vector = item.pos.clone();
+        vector.project(camera);
+        if (vector.z > 1) {
+          item.el.style.display = 'none';
+        } else {
+          item.el.style.display = 'block';
+          const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+          const y = (-(vector.y * 0.5) + 0.5) * window.innerHeight;
+          item.el.style.left = `${x}px`;
+          item.el.style.top = `${y}px`;
+        }
+      });
+
+      if (targetCamPos && targetLookAt) {
+        camera.position.lerp(targetCamPos, 0.06);
+        controls.target.lerp(targetLookAt, 0.06);
+        if (camera.position.distanceTo(targetCamPos) < 0.25) {
+          targetCamPos = null;
+          targetLookAt = null;
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.fov = isMobile() ? 55 : 45;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
